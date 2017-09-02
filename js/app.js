@@ -12,9 +12,23 @@ const client = feathers();
 client
     .configure(hooks())
     .configure(rest('http://localhost:3030').axios(axios))
-    .configure(auth({storage: localStorage}));
+    .configure(auth({
+        storage: localStorage
+    }));
 
 // START setup hellojs
+hello.init({
+    google: '28065581468-4rbjg22ltb9n6nd183e9mh92rsuqe3j7.apps.googleusercontent.com'
+}, {
+    redirect_uri: '/index.html'
+});
+document
+    .querySelector('.btn-google')
+    .addEventListener('click', () => {
+        hello('google').login({
+            scope: 'email'
+        })
+    });
 hello.on('auth.login', async function (auth) {
     const socialToken = auth.authResponse.access_token;
     const userInfo = await hello(auth.network).api('me');
@@ -22,29 +36,32 @@ hello.on('auth.login', async function (auth) {
     const userEmail = userInfo.email;
     serverAuth(userEmail, userId, socialToken);
 });
-hello.init({
-    google: '28065581468-4rbjg22ltb9n6nd183e9mh92rsuqe3j7.apps.googleusercontent.com'
-}, {redirect_uri: '/index.html'});
-document
-    .querySelector('.btn-google')
-    .addEventListener('click', () => {
-        hello('google').login({scope: 'email'})
-    })
 // END setup hellojs
 
 async function serverAuth(email, socialId, socialToken) {
     try {
-        const response = await client.authenticate({strategy: 'social-token', email, socialId, socialToken});
+        // server side FeathersJS authentication
+        const response = await client.authenticate({
+            strategy: 'social-token',
+            email,
+            socialId,
+            socialToken
+        });
         console.log('Authenticated!', response);
+
+        // get user info from JWT
         const payload = await client
             .passport
             .verifyJWT(response.accessToken);
         console.log('JWT Payload', payload);
+
+        // get and set user for FeathersJS client
         const user = await client
             .service('users')
             .get(payload.userId);
         client.set('user', user);
         console.log('User', client.get('user'));
+        
     } catch (err) {
         console.error('Error authenticating!');
         console.error(err);
